@@ -8,28 +8,33 @@ import os
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+# Ensure Flask runs on Render with the correct settings
 @app.route("/process", methods=["POST"])
 def process_image():
     try:
+        # Check if the image file is included in the POST request
         if 'image' in request.files:
             image_bytes = request.files['image'].read()
             document = {"Bytes": image_bytes}
         else:
+            # Fallback to an S3 object if no image is provided
             document = {"S3Object": {"Bucket": "delamyth1", "Name": "delamythrealdeal.jpg"}}
 
-        # 🔐 AWS credentials loaded securely from environment variables (Set yours here)
+        # Set up AWS Textract client (make sure AWS credentials are configured correctly)
         textract = boto3.client(
             "textract",
-            aws_access_key_id=os.environ.get("AKIA5AU7AV332N5TMMMP"),         # <-- Set your key in env
-            aws_secret_access_key=os.environ.get("22AuRjIZziHXHyBUhsVV5TH8mA0t0n6d9dVpfRUxe"), # <-- Set your secret in env
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),  # Ensure environment variables are set
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
             region_name="eu-west-1"
         )
 
+        # Call the Textract API to analyze the document
         response = textract.analyze_document(
             Document=document,
             FeatureTypes=["TABLES", "FORMS"]
         )
 
+        # Extract month/year if available in the document
         month_year = None
         for block in response.get("Blocks", []):
             text = block.get("Text", "")
@@ -43,6 +48,7 @@ def process_image():
                     month_year = f"{months[mi-1]} 20{year_suffix}"
                     break
 
+        # Function to correct time format for parsing
         def correct_time_format(text):
             subs = {
                 '!': '1', 'I': '1', 'l': '1', '|': '1',
@@ -58,6 +64,7 @@ def process_image():
                 return f"0{digits[0]}:{digits[1:3]}"
             return text
 
+        # Extract cell data from Textract response
         cells = {}
         for block in response.get("Blocks", []):
             if block.get("BlockType") == "CELL":
@@ -72,6 +79,7 @@ def process_image():
                                     txt += child.get("Text", '') + ' '
                 cells.setdefault(r, {})[c] = txt.strip()
 
+        # Process extracted data to calculate weekly totals and daily hours
         weekly_totals = {}
         daily_hours = {}
 
@@ -128,8 +136,11 @@ def process_image():
         return jsonify(summary)
 
     except Exception as e:
+        # Return detailed error message if something goes wrong
         return jsonify({"error": str(e)}), 500
 
+# Ensure Flask app runs properly on Render
 if __name__ == "__main__":
+    # Port setup for Render deployment
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
