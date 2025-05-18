@@ -31,7 +31,7 @@ def index():
         <body>
             <h1>Timesheet Image Analyzer</h1>
             <div class="container">
-                <form id="upload-form" enctype="multipart/form-data">
+                <form id="upload-form" enctype="multipart/form-data" action="/process" method="POST">
                     <div class="form-group">
                         <label for="image">Upload timesheet image:</label>
                         <input type="file" id="image" name="image" accept="image/*">
@@ -69,11 +69,9 @@ def index():
                         }
                         
                         html += '<h3>Weekly Totals</h3><ul>';
-                        
                         const sortedNames = Object.keys(data.weekly_totals).sort((a, b) => 
                             data.weekly_totals[b] - data.weekly_totals[a]
                         );
-                        
                         for (const name of sortedNames) {
                             const hours = data.weekly_totals[name];
                             html += `<li>${name}: ${hours.toFixed(2)} hours</li>`;
@@ -93,27 +91,26 @@ def index():
 @app.route("/process", methods=["POST"])
 def process_image():
     try:
-        # Get AWS credentials from environment
         aws_access_key = os.environ.get("AWS_ACCESS_KEY_ID")
         aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
 
         if not aws_access_key or not aws_secret_key:
             logger.error("AWS credentials not configured")
-            return jsonify({"error": "AWS credentials not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in environment variables."}), 500
+            return jsonify({"error": "AWS credentials not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables."}), 500
 
-        # Use uploaded image if available
         if 'image' in request.files and request.files['image'].filename:
             image_file = request.files['image']
             logger.info(f"Processing uploaded file: {image_file.filename}")
+            
             if not image_file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
                 return jsonify({"error": "Invalid file format. Please upload an image file."}), 400
+
             image_bytes = image_file.read()
             document = {"Bytes": image_bytes}
         else:
             logger.info("No image uploaded, using default S3 image")
             document = {"S3Object": {"Bucket": "delamyth1", "Name": "delamythrealdeal.jpg"}}
 
-        # AWS Textract client
         textract = boto3.client(
             "textract",
             aws_access_key_id=aws_access_key,
@@ -121,14 +118,11 @@ def process_image():
             region_name="eu-west-1"
         )
 
-        logger.info("Calling Textract analyze_document")
         response = textract.analyze_document(
             Document=document,
             FeatureTypes=["TABLES", "FORMS"]
         )
-        logger.info("Textract analyze_document completed")
 
-        # Extract month from any detected date
         month_year = None
         for block in response.get("Blocks", []):
             text = block.get("Text", "")
