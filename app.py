@@ -15,7 +15,6 @@ CORS(app)  # Enable CORS for all routes
 
 @app.route("/", methods=["GET"])
 def index():
-    # You might want to create a simple HTML template
     return """
     <html>
         <head>
@@ -71,7 +70,6 @@ def index():
                         
                         html += '<h3>Weekly Totals</h3><ul>';
                         
-                        // Sort names by hours (descending)
                         const sortedNames = Object.keys(data.weekly_totals).sort((a, b) => 
                             data.weekly_totals[b] - data.weekly_totals[a]
                         );
@@ -95,24 +93,20 @@ def index():
 @app.route("/process", methods=["POST"])
 def process_image():
     try:
-        # Check if credentials are configured
+        # Get AWS credentials from environment
         aws_access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
 
-        
         if not aws_access_key or not aws_secret_key:
             logger.error("AWS credentials not configured")
-            return jsonify({"error": "AWS credentials not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables."}), 500
-        
-        # Process image file if uploaded
+            return jsonify({"error": "AWS credentials not configured. Please set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in environment variables."}), 500
+
+        # Use uploaded image if available
         if 'image' in request.files and request.files['image'].filename:
             image_file = request.files['image']
             logger.info(f"Processing uploaded file: {image_file.filename}")
-            
-            # Validate file type if needed
             if not image_file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
                 return jsonify({"error": "Invalid file format. Please upload an image file."}), 400
-                
             image_bytes = image_file.read()
             document = {"Bytes": image_bytes}
         else:
@@ -134,13 +128,12 @@ aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
         )
         logger.info("Textract analyze_document completed")
 
-        # Extract month and year from any date pattern
+        # Extract month from any detected date
         month_year = None
         for block in response.get("Blocks", []):
             text = block.get("Text", "")
             if not text:
                 continue
-                
             match = re.search(r"(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{2})", text)
             if match:
                 day, month_num, year_suffix = match.groups()
@@ -166,7 +159,6 @@ aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
                 return f"0{digits[0]}:{digits[1:3]}"
             return text
 
-        # Parse table cells into row/column dict
         cells = {}
         for block in response.get("Blocks", []):
             if block.get("BlockType") == "CELL":
@@ -181,7 +173,6 @@ aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
                                     txt += child.get("Text", '') + ' '
                 cells.setdefault(r, {})[c] = txt.strip()
 
-        # Compute weekly totals and daily breakdown
         weekly_totals = {}
         daily_hours = {}
 
@@ -225,7 +216,6 @@ aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
             weekly_totals[name] = round((total_seconds / 3600) * 4) / 4
             daily_hours[name] = {day: round((sec / 3600) * 4) / 4 for day, sec in daily_seconds.items()}
 
-        # Find top performer(s)
         max_hours = max(weekly_totals.values()) if weekly_totals else 0
         top_performers = [n for n, h in weekly_totals.items() if h == max_hours and h > 0]
 
