@@ -96,8 +96,8 @@ def index():
 def process_image():
     try:
         # Check if credentials are configured
-        aws_access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-        aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        aws_access_key = os.environ.get("AKIA5AU7AV332ZIYENVX")
+        aws_secret_key = os.environ.get("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")
         
         if not aws_access_key or not aws_secret_key:
             logger.error("AWS credentials not configured")
